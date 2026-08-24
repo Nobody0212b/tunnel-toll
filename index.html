@@ -196,6 +196,14 @@
       <span class="value" id="posValue">—</span>
     </div>
     <div class="row">
+      <span class="label">Accuracy</span>
+      <span class="value" id="accValue">—</span>
+    </div>
+    <div class="row">
+      <span class="label">Check on map</span>
+      <span class="value" id="mapValue">—</span>
+    </div>
+    <div class="row">
       <span class="label">Direction</span>
       <span class="value" id="dirValue">—</span>
     </div>
@@ -266,6 +274,7 @@
 
         const lat = pos.coords.latitude;
         const lon = pos.coords.longitude;
+        const acc = pos.coords.accuracy; // metres
         const direction = lat >= TUNNEL_LAT ? 'south' : 'north'; // if you're north of the tunnel, you'd cross southbound, and vice versa
 
         const now = new Date();
@@ -274,6 +283,13 @@
 
         document.getElementById('posValue').textContent = lat.toFixed(4) + ', ' + lon.toFixed(4);
         document.getElementById('dirValue').textContent = direction === 'north' ? 'You → Northbound' : 'You → Southbound';
+
+        const accEl = document.getElementById('accValue');
+        accEl.textContent = '± ' + Math.round(acc) + ' m';
+        accEl.style.color = acc > 500 ? 'var(--charge)' : 'var(--paper)';
+
+        const mapEl = document.getElementById('mapValue');
+        mapEl.innerHTML = '<a href="https://www.google.com/maps?q=' + lat + ',' + lon + '" target="_blank" style="color:var(--lane); text-decoration:underline;">open pin</a>';
 
         const pill = document.getElementById('bandPill');
         const bandValue = document.getElementById('bandValue');
