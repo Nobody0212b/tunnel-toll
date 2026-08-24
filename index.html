@@ -360,6 +360,50 @@
     return date.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
   }
 
+  function hourToAmPm(h){
+    h = Math.round(h) % 24;
+    const period = h >= 12 ? 'pm' : 'am';
+    let hr12 = h % 12;
+    if (hr12 === 0) hr12 = 12;
+    return hr12 + ':00' + period;
+  }
+
+  function daySegments(direction, isWeekday){
+    if (!isWeekday){
+      return [
+        { start: 0, end: 6, band: 'free' },
+        { start: 6, end: 22, band: 'offpeak' },
+        { start: 22, end: 24, band: 'free' }
+      ];
+    }
+    if (direction === 'north'){
+      return [
+        { start: 0, end: 6, band: 'free' },
+        { start: 6, end: 10, band: 'peak' },
+        { start: 10, end: 22, band: 'offpeak' },
+        { start: 22, end: 24, band: 'free' }
+      ];
+    }
+    // south
+    return [
+      { start: 0, end: 6, band: 'free' },
+      { start: 6, end: 16, band: 'offpeak' },
+      { start: 16, end: 19, band: 'peak' },
+      { start: 19, end: 22, band: 'offpeak' },
+      { start: 22, end: 24, band: 'free' }
+    ];
+  }
+
+  function nextChangeLabel(date, direction){
+    const day = date.getDay();
+    const isWeekday = day >= 1 && day <= 5;
+    const hour = date.getHours() + date.getMinutes()/60;
+    const segments = daySegments(direction, isWeekday);
+    const current = segments.find(s => hour >= s.start && hour < s.end);
+    const endHour = current.end === 24 ? 6 : current.end; // wraps to next morning
+    return 'until ' + hourToAmPm(endHour);
+  }
+
   function renderResult(direction){
     const now = new Date();
     const band = classify(now, direction);
@@ -369,19 +413,20 @@
 
     const pill = document.getElementById('bandPill');
     const priceValue = document.getElementById('priceValue');
+    const changeLabel = nextChangeLabel(now, direction);
 
     if (band === 'free'){
-      pill.textContent = 'Free (night)';
+      pill.textContent = 'Free (night) · ' + changeLabel;
       pill.className = 'status-pill offpeak';
       priceValue.textContent = '£0.00';
       priceValue.className = 'value free';
     } else if (band === 'peak'){
-      pill.textContent = 'Peak · ' + fmtTime(now);
+      pill.textContent = 'Peak · ' + fmtTime(now) + ' (' + changeLabel + ')';
       pill.className = 'status-pill peak';
       priceValue.textContent = '£' + rates.peak.toFixed(2);
       priceValue.className = 'value peak';
     } else {
-      pill.textContent = 'Off-peak · ' + fmtTime(now);
+      pill.textContent = 'Off-peak · ' + fmtTime(now) + ' (' + changeLabel + ')';
       pill.className = 'status-pill offpeak';
       priceValue.textContent = '£' + rates.offpeak.toFixed(2);
       priceValue.className = 'value offpeak';
