@@ -279,6 +279,10 @@
       <span class="label">Your position</span>
       <span class="value small" id="posValue">—</span>
     </div>
+    <div class="row" id="streetRow" style="display:none;">
+      <span class="label">Nearest road</span>
+      <span class="value small" id="streetValue">—</span>
+    </div>
     <div class="row" id="accRow" style="display:none;">
       <span class="label">Accuracy</span>
       <span class="value small" id="accValue">—</span>
@@ -310,6 +314,24 @@
   const btnSouth = document.getElementById('btnSouth');
   const posRow = document.getElementById('posRow');
   const accRow = document.getElementById('accRow');
+  const streetRow = document.getElementById('streetRow');
+
+  async function lookupStreet(lat, lon){
+    const streetEl = document.getElementById('streetValue');
+    streetRow.style.display = 'flex';
+    streetEl.textContent = 'Looking up…';
+    try{
+      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=17&addressdetails=1`, {
+        headers: { 'Accept': 'application/json' }
+      });
+      const data = await res.json();
+      const addr = data.address || {};
+      const road = addr.road || addr.pedestrian || addr.footway || addr.residential;
+      streetEl.textContent = road || 'Not found';
+    } catch(e){
+      streetEl.textContent = 'Lookup failed';
+    }
+  }
 
   function rateTable(date){
     const riseDate = new Date('2026-09-21T00:00:00+01:00');
@@ -373,6 +395,7 @@
     errorBox.classList.remove('show');
     posRow.style.display = 'none';
     accRow.style.display = 'none';
+    streetRow.style.display = 'none';
     btnNorth.classList.toggle('selected', userSide === 'north');
     btnSouth.classList.toggle('selected', userSide === 'south');
 
@@ -413,6 +436,7 @@
         accEl.textContent = '± ' + Math.round(acc) + ' m';
         accEl.style.color = acc > 500 ? 'var(--charge)' : 'var(--paper)';
 
+        lookupStreet(lat, lon);
         renderResult(direction);
       },
       err => {
