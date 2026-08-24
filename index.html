@@ -65,20 +65,20 @@
     color: var(--concrete);
     text-align:center;
     max-width:340px;
-    margin-bottom:36px;
+    margin-bottom:28px;
   }
 
-  /* the button */
+  /* GPS button */
   #checkBtn{
-    width:200px;
-    height:200px;
+    width:170px;
+    height:170px;
     border-radius:50%;
     border: 3px solid var(--lane);
     background: radial-gradient(circle at 35% 30%, #2b2f33, var(--asphalt-2) 70%);
     color: var(--paper);
     font-family:'Oswald', sans-serif;
     font-weight:600;
-    font-size:20px;
+    font-size:17px;
     letter-spacing:1px;
     text-transform:uppercase;
     cursor:pointer;
@@ -105,9 +105,75 @@
     #checkBtn.locating{ animation:none; }
   }
 
+  /* divider */
+  .divider{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    width:100%;
+    max-width:380px;
+    margin:26px 0;
+    color: var(--concrete);
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px;
+    letter-spacing:2px;
+    text-transform:uppercase;
+  }
+  .divider::before, .divider::after{
+    content:'';
+    flex:1;
+    height:1px;
+    background:#2A2E32;
+  }
+
+  /* manual selector */
+  .selector{
+    display:flex;
+    gap:14px;
+    width:100%;
+    max-width:380px;
+  }
+
+  .side-btn{
+    flex:1;
+    height:100px;
+    border-radius:12px;
+    border: 2px solid #2A2E32;
+    background: var(--asphalt-2);
+    color: var(--paper);
+    font-family:'Oswald', sans-serif;
+    font-weight:600;
+    font-size:14px;
+    letter-spacing:0.5px;
+    text-transform:uppercase;
+    cursor:pointer;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    transition: border-color 0.15s ease, background 0.15s ease, transform 0.1s ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .side-btn .arrow{
+    font-size:28px;
+    line-height:1;
+    color: var(--lane);
+  }
+  .side-btn:hover{ border-color: var(--lane); }
+  .side-btn:active{ transform: scale(0.97); }
+  .side-btn:focus-visible{
+    outline: 3px solid var(--paper);
+    outline-offset: 3px;
+  }
+  .side-btn.selected{
+    border-color: var(--lane);
+    background: #24211a;
+  }
+
   /* gantry board result */
   #board{
-    margin-top:40px;
+    margin-top:32px;
     width:100%;
     max-width:380px;
     background: #0B0D0F;
@@ -141,6 +207,11 @@
     text-align:right;
   }
 
+  .row .value.small{
+    font-size:13px;
+    font-weight:500;
+  }
+
   .price-row .value{
     font-size:34px;
     font-weight:700;
@@ -162,7 +233,7 @@
   .status-pill.offpeak{ background: rgba(76,175,109,0.15); color: var(--go); border:1px solid rgba(76,175,109,0.4); }
 
   #error{
-    margin-top:24px;
+    margin-top:20px;
     max-width:340px;
     text-align:center;
     font-size:13px;
@@ -186,22 +257,31 @@
 
   <div class="eyebrow">River Crossing Toll Check</div>
   <h1>Silvertown /<br><span>Blackwall</span></h1>
-  <p class="sub">Tap the button. It reads your position, works out which way you'd be crossing, and tells you the current rate for a car.</p>
+  <p class="sub">Use GPS to detect your side automatically, or just tap which side you're on.</p>
 
-  <button id="checkBtn">Check my toll</button>
+  <button id="checkBtn">Check with GPS</button>
+
+  <div class="divider">or pick manually</div>
+
+  <div class="selector">
+    <button class="side-btn" id="btnNorth" data-side="north">
+      <span class="arrow">↑</span>
+      I'm north of the tunnel
+    </button>
+    <button class="side-btn" id="btnSouth" data-side="south">
+      <span class="arrow">↓</span>
+      I'm south of the tunnel
+    </button>
+  </div>
 
   <div id="board">
-    <div class="row">
+    <div class="row" id="posRow" style="display:none;">
       <span class="label">Your position</span>
-      <span class="value" id="posValue">—</span>
+      <span class="value small" id="posValue">—</span>
     </div>
-    <div class="row">
+    <div class="row" id="accRow" style="display:none;">
       <span class="label">Accuracy</span>
-      <span class="value" id="accValue">—</span>
-    </div>
-    <div class="row">
-      <span class="label">Check on map</span>
-      <span class="value" id="mapValue">—</span>
+      <span class="value small" id="accValue">—</span>
     </div>
     <div class="row">
       <span class="label">Direction</span>
@@ -226,6 +306,10 @@
   const btn = document.getElementById('checkBtn');
   const board = document.getElementById('board');
   const errorBox = document.getElementById('error');
+  const btnNorth = document.getElementById('btnNorth');
+  const btnSouth = document.getElementById('btnSouth');
+  const posRow = document.getElementById('posRow');
+  const accRow = document.getElementById('accRow');
 
   function rateTable(date){
     const riseDate = new Date('2026-09-21T00:00:00+01:00');
@@ -254,12 +338,56 @@
     return date.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
   }
 
-  function run(){
+  function renderResult(direction){
+    const now = new Date();
+    const band = classify(now, direction);
+    const rates = rateTable(now);
+
+    document.getElementById('dirValue').textContent = direction === 'north' ? 'You → Northbound' : 'You → Southbound';
+
+    const pill = document.getElementById('bandPill');
+    const priceValue = document.getElementById('priceValue');
+
+    if (band === 'free'){
+      pill.textContent = 'Free (night)';
+      pill.className = 'status-pill offpeak';
+      priceValue.textContent = '£0.00';
+      priceValue.className = 'value free';
+    } else if (band === 'peak'){
+      pill.textContent = 'Peak · ' + fmtTime(now);
+      pill.className = 'status-pill peak';
+      priceValue.textContent = '£' + rates.peak.toFixed(2);
+      priceValue.className = 'value peak';
+    } else {
+      pill.textContent = 'Off-peak · ' + fmtTime(now);
+      pill.className = 'status-pill offpeak';
+      priceValue.textContent = '£' + rates.offpeak.toFixed(2);
+      priceValue.className = 'value offpeak';
+    }
+
+    board.classList.add('show');
+  }
+
+  // Manual selector: if you're NORTH of the tunnel you cross SOUTH, and vice versa.
+  function runManual(userSide){
     errorBox.classList.remove('show');
-    board.classList.remove('show');
+    posRow.style.display = 'none';
+    accRow.style.display = 'none';
+    btnNorth.classList.toggle('selected', userSide === 'north');
+    btnSouth.classList.toggle('selected', userSide === 'south');
+
+    const direction = userSide === 'north' ? 'south' : 'north';
+    renderResult(direction);
+  }
+
+  // GPS: same rule, if your latitude is north of the tunnel's, you cross south.
+  function runGPS(){
+    errorBox.classList.remove('show');
+    btnNorth.classList.remove('selected');
+    btnSouth.classList.remove('selected');
 
     if (!('geolocation' in navigator)){
-      errorBox.textContent = "This browser can't share your location. Try a different browser or device.";
+      errorBox.textContent = "This browser can't share your location. Try a different browser, or use the manual selector instead.";
       errorBox.classList.add('show');
       return;
     }
@@ -270,57 +398,30 @@
     navigator.geolocation.getCurrentPosition(
       pos => {
         btn.classList.remove('locating');
-        btn.textContent = 'Check again';
+        btn.textContent = 'Check with GPS';
 
         const lat = pos.coords.latitude;
         const lon = pos.coords.longitude;
         const acc = pos.coords.accuracy; // metres
-        const direction = lat >= TUNNEL_LAT ? 'south' : 'north'; // if you're north of the tunnel, you'd cross southbound, and vice versa
+        const direction = lat >= TUNNEL_LAT ? 'south' : 'north';
 
-        const now = new Date();
-        const band = classify(now, direction);
-        const rates = rateTable(now);
-
+        posRow.style.display = 'flex';
+        accRow.style.display = 'flex';
         document.getElementById('posValue').textContent = lat.toFixed(4) + ', ' + lon.toFixed(4);
-        document.getElementById('dirValue').textContent = direction === 'north' ? 'You → Northbound' : 'You → Southbound';
 
         const accEl = document.getElementById('accValue');
         accEl.textContent = '± ' + Math.round(acc) + ' m';
         accEl.style.color = acc > 500 ? 'var(--charge)' : 'var(--paper)';
 
-        const mapEl = document.getElementById('mapValue');
-        mapEl.innerHTML = '<a href="https://www.google.com/maps?q=' + lat + ',' + lon + '" target="_blank" style="color:var(--lane); text-decoration:underline;">open pin</a>';
-
-        const pill = document.getElementById('bandPill');
-        const bandValue = document.getElementById('bandValue');
-        const priceValue = document.getElementById('priceValue');
-
-        if (band === 'free'){
-          pill.textContent = 'Free (night)';
-          pill.className = 'status-pill offpeak';
-          priceValue.textContent = '£0.00';
-          priceValue.className = 'value free';
-        } else if (band === 'peak'){
-          pill.textContent = 'Peak · ' + fmtTime(now);
-          pill.className = 'status-pill peak';
-          priceValue.textContent = '£' + rates.peak.toFixed(2);
-          priceValue.className = 'value peak';
-        } else {
-          pill.textContent = 'Off-peak · ' + fmtTime(now);
-          pill.className = 'status-pill offpeak';
-          priceValue.textContent = '£' + rates.offpeak.toFixed(2);
-          priceValue.className = 'value offpeak';
-        }
-
-        board.classList.add('show');
+        renderResult(direction);
       },
       err => {
         btn.classList.remove('locating');
-        btn.textContent = 'Check my toll';
-        let msg = 'Could not read your location.';
-        if (err.code === 1) msg = 'Location permission denied. Allow location access and try again.';
-        if (err.code === 2) msg = 'Location unavailable right now. Try again in a moment.';
-        if (err.code === 3) msg = 'Location request timed out. Try again.';
+        btn.textContent = 'Check with GPS';
+        let msg = 'Could not read your location. Try the manual selector instead.';
+        if (err.code === 1) msg = 'Location permission denied. Allow location access, or use the manual selector.';
+        if (err.code === 2) msg = 'Location unavailable right now. Try the manual selector instead.';
+        if (err.code === 3) msg = 'Location request timed out. Try the manual selector instead.';
         errorBox.textContent = msg;
         errorBox.classList.add('show');
       },
@@ -328,7 +429,9 @@
     );
   }
 
-  btn.addEventListener('click', run);
+  btn.addEventListener('click', runGPS);
+  btnNorth.addEventListener('click', () => runManual('north'));
+  btnSouth.addEventListener('click', () => runManual('south'));
 </script>
 
 </body>
